@@ -102,7 +102,7 @@ static int alligned(const Tri a, const Tri b)
 }
 
 // Flags alligned edges.
-static Tris emark(Tris edges)
+static void emark(Tris edges)
 {
     for(int i = 0; i < edges.count; i++)
     {
@@ -116,7 +116,6 @@ static Tris emark(Tris edges)
                 edges.tri[j].c = one;
         }
     }
-    return edges;
 }
 
 // Creates new triangles from unique edges and appends to tris.
@@ -169,7 +168,7 @@ static Tris delaunay(const Points ps, const int w, const int h, const int max)
         // Collect all triangle edges where point was inside circumcenter.
         edges = ecollect(edges, in);
         // Flag edges that are non-unique.
-        edges = emark(edges);
+        emark(edges);
         // Construct new triangles with unique edges.
         out = ejoin(out, edges, p);
         // Update triangle list.
@@ -209,7 +208,12 @@ static Points prand(const int w, const int h, const int max)
             (float) (rand() % (w - border) + border / 2),
             (float) (rand() % (h - border) + border / 2),
         };
-        ps.point[ps.count++] = p;
+        const float grid = 30.0;
+        const Point snapped = {
+            roundf(p.x / grid) * grid,
+            roundf(p.y / grid) * grid,
+        };
+        ps.point[ps.count++] = snapped;
     }
     return ps;
 }
@@ -270,22 +274,21 @@ static int connected(const Point a, const Point b, const Tris edges)
             const Tri edge = edges.tri[i];
             if(peql(edge.c, one))
                 continue;
-            if(peql(edge.a, removed) || peql(edge.b, removed))
+            if(peql(edge.a, removed))
                 reach = tsadd(reach, edge);
         }
         // For all reachable edges
         for(int i = 0; i < reach.count; i++)
         {
-            const Point other = peql(reach.tri[i].a, removed) ? reach.tri[i].b : removed;
             // Destination reached.
-            if(peql(other, b))
+            if(peql(reach.tri[i].b, b))
             {
                 connection = 1;
                 break;
             }
             // Otherwise add todo list.
-            if(!psfind(done, other))
-                todo = psadd(todo, other);
+            if(!psfind(done, reach.tri[i].b))
+                todo = psadd(todo, reach.tri[i].b);
         }
     }
     free(todo.point);
@@ -300,7 +303,8 @@ static void revdel(Tris edges, const int w, const int h)
     for(int i = 0; i < edges.count; i++)
     {
         Tri* edge = &edges.tri[i];
-        if(outob(edge->a, w, h) || outob(edge->b, w, h))
+        if(outob(edge->a, w, h)
+        || outob(edge->b, w, h))
         {
             edge->c = one;
             continue;
@@ -308,18 +312,20 @@ static void revdel(Tris edges, const int w, const int h)
         // Break the connection.
         edge->c = one;
         // If two points are not connected in anyway then reconnect.
+        // Occasionally it will create a loop because true connectivity
+        // checks all edges. Thankfully, the occasional loop benefits
+        // the dungeon design else the explorer will get bored dead end after dead end.
         if(!connected(edge->a, edge->b, edges)) edge->c = zer;
     }
 }
 
 static void draw(SDL_Renderer* const renderer, const Tris edges)
 {
-    for(int i = 0; i < edges.count; i++)
+    for(int i = 0; i < edges.count; i += 1)
     {
         const Tri e = edges.tri[i];
         if(peql(e.c, one))
             continue;
-        printf("%f %f %f %f\n", e.a.x, e.a.y, e.b.x, e.b.y);
         SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
         SDL_RenderDrawLine(renderer, e.a.x, e.a.y, e.b.x, e.b.y);
     }
@@ -330,7 +336,7 @@ int main()
     srand(time(0));
     const int xres = 800;
     const int yres = 600;
-    const int max = 100;
+    const int max = 150;
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_CreateWindowAndRenderer(xres, yres, 0, &window, &renderer);
