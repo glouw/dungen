@@ -48,12 +48,18 @@ static Tris tsnew(const int max)
     return ts;
 }
 
-static Tris tsadd(Tris tris, const Tri tri)
+static Tris tsadd(Tris tris, const Tri tri, const char* why)
 {
     if(tris.count == tris.max)
     {
-        puts("tris size limitation reached");
+        printf("tris size limitation reached: %s\n", why);
         exit(1);
+    }
+    static int flag;
+    if(flag == 0 && tris.count / (float) tris.max > 0.75f)
+    {
+        printf("warning: tris size reaching 75%% capacity: %s\n", why);
+        flag = 1;
     }
     tris.tri[tris.count++] = tri;
     return tris;
@@ -88,9 +94,9 @@ static Tris ecollect(Tris edges, const Tris in)
         const Tri ab = { tri.a, tri.b, zer };
         const Tri bc = { tri.b, tri.c, zer };
         const Tri ca = { tri.c, tri.a, zer };
-        edges = tsadd(edges, ab);
-        edges = tsadd(edges, bc);
-        edges = tsadd(edges, ca);
+        edges = tsadd(edges, ab, "ab");
+        edges = tsadd(edges, bc, "bc");
+        edges = tsadd(edges, ca, "ca");
     }
     return edges;
 }
@@ -98,7 +104,8 @@ static Tris ecollect(Tris edges, const Tris in)
 // Returns true if edge ab of two triangles are alligned.
 static int alligned(const Tri a, const Tri b)
 {
-    return (peql(a.a, b.a) && peql(a.b, b.b)) || (peql(a.a, b.b) && peql(a.b, b.a));
+    return (peql(a.a, b.a) && peql(a.b, b.b))
+        || (peql(a.a, b.b) && peql(a.b, b.a));
 }
 
 // Flags alligned edges.
@@ -127,7 +134,7 @@ static Tris ejoin(Tris tris, const Tris edges, const Point p)
         if(peql(edge.c, zer))
         {
             const Tri tri = { edge.a, edge.b, p };
-            tris = tsadd(tris, tri);
+            tris = tsadd(tris, tri, "ejoin");
         }
     }
     return tris;
@@ -150,7 +157,7 @@ static Tris delaunay(const Points ps, const int w, const int h, const int max)
     Tri* dummy = tris.tri;
     // The super triangle will snuggley fit over the screen.
     const Tri super = { { (float) -w, 0.0f }, { 2.0f * w, 0.0f }, { w / 2.0f, 2.0f * h } };
-    tris = tsadd(tris, super);
+    tris = tsadd(tris, super, "super");
     for(int j = 0; j < ps.count; j++)
     {
         in.count = out.count = edges.count = 0;
@@ -161,9 +168,9 @@ static Tris delaunay(const Points ps, const int w, const int h, const int max)
             const Tri tri = tris.tri[i];
             // Get triangles where point lies inside their circumcenter...
             if(incircum(tri, p))
-                in = tsadd(in, tri);
+                in = tsadd(in, tri, "in");
             // And get triangles where point lies outside of their circumcenter.
-            else out = tsadd(out, tri);
+            else out = tsadd(out, tri, "out");
         }
         // Collect all triangle edges where point was inside circumcenter.
         edges = ecollect(edges, in);
@@ -187,28 +194,27 @@ static Points psnew(const int max)
     return ps;
 }
 
-static Points psadd(Points ps, const Point p)
+static Points psadd(Points ps, const Point p, const char* why)
 {
     if(ps.count == ps.max)
     {
-        puts("points size limitation reached");
+        printf("points size limitation reached: %s\n", why);
         exit(1);
     }
     ps.point[ps.count++] = p;
     return ps;
 }
 
-static Points prand(const int w, const int h, const int max)
+static Points prand(const int w, const int h, const int max, const int grid)
 {
     Points ps = psnew(max);
-    const int border = 100;
+    const int border = 300;
     for(int i = 0; i < max; i++)
     {
         const Point p = {
             (float) (rand() % (w - border) + border / 2),
             (float) (rand() % (h - border) + border / 2),
         };
-        const float grid = 30.0;
         const Point snapped = {
             roundf(p.x / grid) * grid,
             roundf(p.y / grid) * grid,
@@ -261,12 +267,12 @@ static int connected(const Point a, const Point b, const Tris edges)
     Points todo = psnew(edges.max);
     Points done = psnew(edges.max);
     Tris reach = tsnew(edges.max);
-    todo = psadd(todo, a);
+    todo = psadd(todo, a, "first todo");
     int connection = 0;
     while(todo.count != 0 && connection != 1)
     {
         const Point removed = todo.point[--todo.count];
-        done = psadd(done, removed);
+        done = psadd(done, removed, "done a point");
         // Get reachable edges from current point.
         reach.count = 0;
         for(int i = 0; i < edges.count; i++)
@@ -275,7 +281,7 @@ static int connected(const Point a, const Point b, const Tris edges)
             if(peql(edge.c, one))
                 continue;
             if(peql(edge.a, removed))
-                reach = tsadd(reach, edge);
+                reach = tsadd(reach, edge, "reach");
         }
         // For all reachable edges
         for(int i = 0; i < reach.count; i++)
@@ -288,7 +294,7 @@ static int connected(const Point a, const Point b, const Tris edges)
             }
             // Otherwise add todo list.
             if(!psfind(done, reach.tri[i].b))
-                todo = psadd(todo, reach.tri[i].b);
+                todo = psadd(todo, reach.tri[i].b, "todo reachable");
         }
     }
     free(todo.point);
@@ -319,6 +325,21 @@ static void revdel(Tris edges, const int w, const int h)
     }
 }
 
+static void mdups(const Tris edges)
+{
+    for(int i = 0; i < edges.count; i++)
+    for(int j = 0; j < edges.count; j++)
+    {
+        if(peql(edges.tri[j].c, one))
+            continue;
+        if(peql(edges.tri[i].c, one))
+            continue;
+        if(peql(edges.tri[i].a, edges.tri[j].b)
+        && peql(edges.tri[i].b, edges.tri[j].a))
+            edges.tri[j].c = one;
+    }
+}
+
 static void draw(SDL_Renderer* const renderer, const Tris edges)
 {
     for(int i = 0; i < edges.count; i += 1)
@@ -326,8 +347,21 @@ static void draw(SDL_Renderer* const renderer, const Tris edges)
         const Tri e = edges.tri[i];
         if(peql(e.c, one))
             continue;
-        SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
-        SDL_RenderDrawLine(renderer, e.a.x, e.a.y, e.b.x, e.b.y);
+        // X.
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
+        SDL_RenderDrawLine(renderer,
+            e.a.x,
+            e.a.y,
+            e.b.x,
+            e.a.y);
+        SDL_RenderDrawLine(renderer,
+            e.b.x,
+            e.b.y,
+            e.b.x,
+            e.a.y);
+        // Hypot.
+        //SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
+        //SDL_RenderDrawLine(renderer, e.a.x + 2, e.a.y + 2, e.b.x + 2, e.b.y + 2);
     }
 }
 
@@ -336,19 +370,21 @@ int main()
     srand(time(0));
     const int xres = 800;
     const int yres = 600;
-    const int max = 150;
+    const int max = 200;
+    const int grid = 40;
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_CreateWindowAndRenderer(xres, yres, 0, &window, &renderer);
-    const Points ps = prand(xres, yres, max);
+    const Points ps = prand(xres, yres, max, grid);
     // 100 points = 300 points worth of triangles for spanning a delaunay network.
-    const Tris tris = delaunay(ps, xres, yres, 3 * max);
+    const Tris tris = delaunay(ps, xres, yres, max);
     // 300 triangles = 900 points worth of non-unique edges.
-    const Tris edges = ecollect(tsnew(9 * max), tris);
+    const Tris edges = ecollect(tsnew(3 * max), tris);
     // The revere-delete algorithm is a an algo in graph theory used to
     // obtain a minimum spanning tree from a given connected edge weighted graph.
     // Kruskal et al. (C) 1956.
     revdel(edges, xres, yres);
+    mdups(edges);
     draw(renderer, edges);
     SDL_RenderPresent(renderer);
     SDL_Event event;
