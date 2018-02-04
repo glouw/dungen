@@ -208,7 +208,7 @@ static Points psadd(Points ps, const Point p, const char* why)
 static Points prand(const int w, const int h, const int max, const int grid)
 {
     Points ps = psnew(max);
-    const int border = 300;
+    const int border = 100;
     for(int i = 0; i < max; i++)
     {
         const Point p = {
@@ -347,39 +347,28 @@ static void draw(SDL_Renderer* const renderer, const Tris edges)
         const Tri e = edges.tri[i];
         if(peql(e.c, one))
             continue;
-        // X.
         SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
-        SDL_RenderDrawLine(renderer,
-            e.a.x,
-            e.a.y,
-            e.b.x,
-            e.a.y);
-        SDL_RenderDrawLine(renderer,
-            e.b.x,
-            e.b.y,
-            e.b.x,
-            e.a.y);
-        // Hypot.
-        //SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
-        //SDL_RenderDrawLine(renderer, e.a.x + 2, e.a.y + 2, e.b.x + 2, e.b.y + 2);
+        SDL_RenderDrawLine(renderer, e.a.x, e.a.y, e.b.x, e.a.y);
+        SDL_RenderDrawLine(renderer, e.b.x, e.b.y, e.b.x, e.a.y);
     }
 }
 
 int main()
 {
     srand(time(0));
-    const int xres = 800;
-    const int yres = 600;
-    const int max = 200;
-    const int grid = 40;
+    // Randomize these.
+    const int xres = 400 + rand() % 400;
+    const int yres = 300 + rand() % 300;
+    const int max = 50 + rand() % 50;
+    // Keep grid constant.
+    const int grid = 20;
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_CreateWindowAndRenderer(xres, yres, 0, &window, &renderer);
     const Points ps = prand(xres, yres, max, grid);
-    // 100 points = 300 points worth of triangles for spanning a delaunay network.
-    const Tris tris = delaunay(ps, xres, yres, max);
+    const Tris tris = delaunay(ps, xres, yres, 9 * max);
     // 300 triangles = 900 points worth of non-unique edges.
-    const Tris edges = ecollect(tsnew(3 * max), tris);
+    const Tris edges = ecollect(tsnew(27 * max), tris);
     // The revere-delete algorithm is a an algo in graph theory used to
     // obtain a minimum spanning tree from a given connected edge weighted graph.
     // Kruskal et al. (C) 1956.
