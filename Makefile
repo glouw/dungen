@@ -3,6 +3,7 @@ CC = gcc
 NAME = dungen
 
 SRCS = main.c
+SRCS+= Map.c
 
 # CompSpec defined in windows environment.
 ifdef ComSpec
