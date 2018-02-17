@@ -69,7 +69,7 @@ static char** reset(char** block, const int h, const int w, const int blok)
     return block;
 }
 
-static char** new(const int h, const int w, const int blok)
+static char** bnew(const int h, const int w, const int blok)
 {
     char** block = toss(char*, h);
     for(int row = 0; row < h; row++)
@@ -83,7 +83,7 @@ static Map mnew(const int h, const int w)
     zero(map);
     map.h = h;
     map.w = w;
-    map.walling = new(map.h, map.w, '#');
+    map.walling = bnew(map.h, map.w, '#');
     return map;
 }
 
