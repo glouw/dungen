@@ -6,12 +6,13 @@ Delaunay Triangulation Dungeon Generation.
 
 Use case:
 
+    #include "Map.h"
+
     int main()
     {
-        srand(time(0));
-        const Map map = mgen(80, 120, 10, 20 * (1 + rand() % 4));
-        mprint(map);
-        mclose(map);
+        const Map map = xmgen(80, 120, 10, 40);
+        xmprint(map);
+        xmclose(map);
     }
 
 Where the map generation function is defined as:
