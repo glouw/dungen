@@ -378,26 +378,26 @@ static void revdel(Tris edges, const int w, const int h, const Flags flags)
 static void mdups(const Tris edges, const Flags flags)
 {
     for(int i = 0; i < edges.count; i++)
-        for(int j = 0; j < edges.count; j++)
-        {
-            if(psame(edges.tri[j].c, flags.one))
-                continue;
-            if(psame(edges.tri[i].c, flags.one))
-                continue;
-            if(reveql(edges.tri[i], edges.tri[j]))
-                edges.tri[j].c = flags.one;
-        }
+    for(int j = 0; j < edges.count; j++)
+    {
+        if(psame(edges.tri[j].c, flags.one))
+            continue;
+        if(psame(edges.tri[i].c, flags.one))
+            continue;
+        if(reveql(edges.tri[i], edges.tri[j]))
+            edges.tri[j].c = flags.one;
+    }
 }
 
 static void mroom(const Map map, const Point where, const int w, const int h)
 {
     for(int i = -w; i <= w; i++)
-        for(int j = -h; j <= h; j++)
-        {
-            const int xx = where.x + i;
-            const int yy = where.y + j;
-            map.walling[yy][xx] = ' ';
-        }
+    for(int j = -h; j <= h; j++)
+    {
+        const int xx = where.x + i;
+        const int yy = where.y + j;
+        map.walling[yy][xx] = ' ';
+    }
 }
 
 static void mcorridor(const Map map, const Point a, const Point b)
