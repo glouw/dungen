@@ -3,8 +3,8 @@
 typedef struct
 {
     char** walling;
-    int rows;
-    int cols;
+    int h;
+    int w;
 }
 Map;
 

@@ -61,29 +61,29 @@ static void bomb(const char* const message, ...)
     exit(1);
 }
 
-static char** reset(char** block, const int rows, const int cols, const int blok)
+static char** reset(char** block, const int h, const int w, const int blok)
 {
-    for(int row = 0; row < rows; row++)
-        for(int col = 0; col < cols; col++)
-            block[row][col] = blok;
+    for(int row = 0; row < h; row++)
+    for(int col = 0; col < w; col++)
+        block[row][col] = blok;
     return block;
 }
 
-static char** new(const int rows, const int cols, const int blok)
+static char** new(const int h, const int w, const int blok)
 {
-    char** block = toss(char*, rows);
-    for(int row = 0; row < rows; row++)
-        block[row] = toss(char, cols);
-    return reset(block, rows, cols, blok);
+    char** block = toss(char*, h);
+    for(int row = 0; row < h; row++)
+        block[row] = toss(char, w);
+    return reset(block, h, w, blok);
 }
 
-static Map mnew(const int rows, const int cols)
+static Map mnew(const int h, const int w)
 {
     Map map;
     zero(map);
-    map.rows = rows;
-    map.cols = cols;
-    map.walling = new(map.rows, map.cols, '#');
+    map.h = h;
+    map.w = w;
+    map.walling = new(map.h, map.w, '#');
     return map;
 }
 
@@ -468,15 +468,15 @@ Map xmgen(const int w, const int h, const int grid, const int max)
 
 void xmclose(const Map map)
 {
-    for(int row = 0; row < map.rows; row++)
+    for(int row = 0; row < map.h; row++)
         free(map.walling[row]);
     free(map.walling);
 }
 
 void xmprint(const Map map)
 {
-    for(int row = 0; row < map.rows; row++)
-    for(int col = 0; col < map.cols; col++)
-        printf("%c%s", map.walling[row][col], col == map.cols - 1 ? "\n" : "");
+    for(int row = 0; row < map.h; row++)
+    for(int col = 0; col < map.w; col++)
+        printf("%c%s", map.walling[row][col], col == map.w - 1 ? "\n" : "");
     putchar('\n');
 }
