@@ -1,9 +1,16 @@
 #include <SDL2/SDL.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+
+#define toss(t, n) ((t*) malloc((n) * sizeof(t)))
+
+#define zero(a) (memset(&(a), 0, sizeof(a)))
+
+typedef int (*const Direction)(const void*, const void*);
 
 typedef struct
 {
@@ -11,6 +18,14 @@ typedef struct
     float y;
 }
 Point;
+
+typedef struct
+{
+    Point* point;
+    int count;
+    int max;
+}
+Points;
 
 typedef struct
 {
@@ -30,44 +45,174 @@ Tris;
 
 typedef struct
 {
-    Point* point;
-    int count;
-    int max;
+    char** walling;
+    int rows;
+    int cols;
 }
-Points;
+Map;
 
-typedef int (*const Direction)(const void*, const void*);
+typedef struct
+{
+    Point zer;
+    Point one;
+}
+Flags;
 
-const Point zer = { 0.0f, 0.0f };
+static void bomb(const char* const message, ...)
+{
+    va_list args;
+    va_start(args, message);
+    vprintf(message, args);
+    va_end(args);
+    exit(1);
+}
 
-const Point one = { 1.0f, 1.0f };
+static void mprint(const Map map)
+{
+    for(int row = 0; row < map.rows; row++)
+    for(int col = 0; col < map.cols; col++)
+        printf("%c%s", map.walling[row][col], col == map.cols - 1 ? "\n" : "");
+    putchar('\n');
+}
+
+static char** reset(char** block, const int rows, const int cols, const int blok)
+{
+    for(int row = 0; row < rows; row++)
+        for(int col = 0; col < cols; col++)
+            block[row][col] = blok;
+    return block;
+}
+
+static char** new(const int rows, const int cols, const int blok)
+{
+    char** block = toss(char*, rows);
+    for(int row = 0; row < rows; row++)
+        block[row] = toss(char, cols);
+    return reset(block, rows, cols, blok);
+}
+
+static Map mnew(const int rows, const int cols)
+{
+    Map map;
+    zero(map);
+    map.rows = rows;
+    map.cols = cols;
+    map.walling = new(map.rows, map.cols, '#');
+    return map;
+}
+
+static void mclose(const Map map)
+{
+    for(int row = 0; row < map.rows; row++)
+        free(map.walling[row]);
+    free(map.walling);
+}
+
+static int psame(const Point a, const Point b)
+{
+    return a.x == b.x && a.y == b.y;
+}
+
+static int fl(const float x)
+{
+    return (int) x - (x < (int) x);
+}
+
+static Point snap(const Point a, const int grid)
+{
+    const Point out = {
+        (float) fl(a.x / grid) * grid,
+        (float) fl(a.y / grid) * grid,
+    };
+    return out;
+}
+
+static Points psnew(const int max)
+{
+    const Points ps = { toss(Point, max), 0, max };
+    return ps;
+}
+
+static Points psadd(Points ps, const Point p)
+{
+    if(ps.count == ps.max)
+        bomb("points size limitation reached\n");
+    ps.point[ps.count++] = p;
+    return ps;
+}
+
+static int psfind(const Points ps, const Point p)
+{
+    for(int i = 0; i < ps.count; i++)
+        if(psame(ps.point[i], p))
+            return true;
+    return false;
+}
 
 static Tris tsnew(const int max)
 {
-    const Tris ts = { (Tri*) malloc(sizeof(Tri) * max), 0, max };
+    const Tris ts = { toss(Tri, max), 0, max };
     return ts;
 }
 
-static Tris tsadd(Tris tris, const Tri tri, const char* why)
+static Tris tsadd(Tris tris, const Tri tri)
 {
     if(tris.count == tris.max)
-    {
-        printf("tris size limitation reached: %s\n", why);
-        exit(1);
-    }
-    static int flag;
-    if(flag == 0 && tris.count / (float) tris.max > 0.75f)
-    {
-        printf("warning: tris size reaching 75%% capacity: %s\n", why);
-        flag = 1;
-    }
+        bomb("tris size limitation reached\n");
     tris.tri[tris.count++] = tri;
     return tris;
 }
 
-static int peql(const Point a, const Point b)
+static int reveql(const Tri a, const Tri b)
 {
-    return a.x == b.x && a.y == b.y;
+    return psame(a.a, b.b) && psame(a.b, b.a);
+}
+
+static int foreql(const Tri a, const Tri b)
+{
+    return psame(a.a, b.a) && psame(a.b, b.b);
+}
+
+static int alligned(const Tri a, const Tri b)
+{
+    return foreql(a, b) || reveql(a, b);
+}
+
+// Flags alligned edges.
+static void emark(Tris edges, const Flags flags)
+{
+    for(int i = 0; i < edges.count; i++)
+    {
+        const Tri edge = edges.tri[i];
+        for(int j = 0; j < edges.count; j++)
+        {
+            if(i == j)
+                continue;
+            const Tri other = edges.tri[j];
+            if(alligned(edge, other))
+                edges.tri[j].c = flags.one;
+        }
+    }
+}
+
+// Creates new triangles from unique edges and appends to tris.
+static Tris ejoin(Tris tris, const Tris edges, const Point p, const Flags flags)
+{
+    for(int j = 0; j < edges.count; j++)
+    {
+        const Tri edge = edges.tri[j];
+        if(psame(edge.c, flags.zer))
+        {
+            const Tri tri = { edge.a, edge.b, p };
+            tris = tsadd(tris, tri);
+        }
+    }
+    return tris;
+}
+
+static int outob(const Point p, const int w, const int h)
+{
+    return p.x < 0 || p.y < 0 || p.x >= w || p.y >= h;
 }
 
 static int incircum(const Tri t, const Point p)
@@ -86,66 +231,22 @@ static int incircum(const Tri t, const Point p)
 }
 
 // Collects all edges from given triangles.
-static Tris ecollect(Tris edges, const Tris in)
+static Tris ecollect(Tris edges, const Tris in, const Flags flags)
 {
     for(int i = 0; i < in.count; i++)
     {
         const Tri tri = in.tri[i];
-        const Tri ab = { tri.a, tri.b, zer };
-        const Tri bc = { tri.b, tri.c, zer };
-        const Tri ca = { tri.c, tri.a, zer };
-        edges = tsadd(edges, ab, "ab");
-        edges = tsadd(edges, bc, "bc");
-        edges = tsadd(edges, ca, "ca");
+        const Tri ab = { tri.a, tri.b, flags.zer };
+        const Tri bc = { tri.b, tri.c, flags.zer };
+        const Tri ca = { tri.c, tri.a, flags.zer };
+        edges = tsadd(edges, ab);
+        edges = tsadd(edges, bc);
+        edges = tsadd(edges, ca);
     }
     return edges;
 }
 
-// Returns true if edge ab of two triangles are alligned.
-static int alligned(const Tri a, const Tri b)
-{
-    return (peql(a.a, b.a) && peql(a.b, b.b))
-        || (peql(a.a, b.b) && peql(a.b, b.a));
-}
-
-// Flags alligned edges.
-static void emark(Tris edges)
-{
-    for(int i = 0; i < edges.count; i++)
-    {
-        const Tri edge = edges.tri[i];
-        for(int j = 0; j < edges.count; j++)
-        {
-            if(i == j)
-                continue;
-            const Tri other = edges.tri[j];
-            if(alligned(edge, other))
-                edges.tri[j].c = one;
-        }
-    }
-}
-
-// Creates new triangles from unique edges and appends to tris.
-static Tris ejoin(Tris tris, const Tris edges, const Point p)
-{
-    for(int j = 0; j < edges.count; j++)
-    {
-        const Tri edge = edges.tri[j];
-        if(peql(edge.c, zer))
-        {
-            const Tri tri = { edge.a, edge.b, p };
-            tris = tsadd(tris, tri, "ejoin");
-        }
-    }
-    return tris;
-}
-
-static int outob(const Point p, const int w, const int h)
-{
-    return p.x < 0 || p.y < 0 || p.x >= w || p.y >= h;
-}
-
-static Tris delaunay(const Points ps, const int w, const int h, const int max)
+static Tris delaunay(const Points ps, const int w, const int h, const int max, const Flags flags)
 {
     Tris in = tsnew(max);
     Tris out = tsnew(max);
@@ -157,7 +258,7 @@ static Tris delaunay(const Points ps, const int w, const int h, const int max)
     Tri* dummy = tris.tri;
     // The super triangle will snuggley fit over the screen.
     const Tri super = { { (float) -w, 0.0f }, { 2.0f * w, 0.0f }, { w / 2.0f, 2.0f * h } };
-    tris = tsadd(tris, super, "super");
+    tris = tsadd(tris, super);
     for(int j = 0; j < ps.count; j++)
     {
         in.count = out.count = edges.count = 0;
@@ -168,16 +269,16 @@ static Tris delaunay(const Points ps, const int w, const int h, const int max)
             const Tri tri = tris.tri[i];
             // Get triangles where point lies inside their circumcenter...
             if(incircum(tri, p))
-                in = tsadd(in, tri, "in");
+                in = tsadd(in, tri);
             // And get triangles where point lies outside of their circumcenter.
-            else out = tsadd(out, tri, "out");
+            else out = tsadd(out, tri);
         }
         // Collect all triangle edges where point was inside circumcenter.
-        edges = ecollect(edges, in);
+        edges = ecollect(edges, in, flags);
         // Flag edges that are non-unique.
-        emark(edges);
+        emark(edges, flags);
         // Construct new triangles with unique edges.
-        out = ejoin(out, edges, p);
+        out = ejoin(out, edges, p, flags);
         // Update triangle list.
         // FAST SHALLOW COPY - ORIGINAL POINTER LOST.
         tris = out;
@@ -188,47 +289,24 @@ static Tris delaunay(const Points ps, const int w, const int h, const int max)
     return tris;
 }
 
-static Points psnew(const int max)
-{
-    const Points ps = { (Point*) malloc(sizeof(Point) * max), 0, max };
-    return ps;
-}
-
-static Points psadd(Points ps, const Point p, const char* why)
-{
-    if(ps.count == ps.max)
-    {
-        printf("points size limitation reached: %s\n", why);
-        exit(1);
-    }
-    ps.point[ps.count++] = p;
-    return ps;
-}
-
-static Points prand(const int w, const int h, const int max, const int grid)
+static Points prand(const int w, const int h, const int max, const int grid, const int border)
 {
     Points ps = psnew(max);
-    const int border = 100;
-    for(int i = 0; i < max; i++)
+    for(int i = ps.count; i < ps.max; i++)
     {
         const Point p = {
             (float) (rand() % (w - border) + border / 2),
             (float) (rand() % (h - border) + border / 2),
         };
-        const Point snapped = {
-            roundf(p.x / grid) * grid,
-            roundf(p.y / grid) * grid,
-        };
-        ps.point[ps.count++] = snapped;
+        const Point snapped = snap(p, grid);
+        ps = psadd(ps, snapped);
     }
     return ps;
 }
 
 static Point sub(const Point a, const Point b)
 {
-    Point out;
-    out.x = a.x - b.x;
-    out.y = a.y - b.y;
+    const Point out = { a.x - b.x, a.y - b.y };
     return out;
 }
 
@@ -254,47 +332,39 @@ static void sort(const Tris edges, const Direction direction)
     qsort(edges.tri, edges.count, sizeof(Tri), direction);
 }
 
-static int psfind(const Points ps, const Point p)
-{
-    for(int i = 0; i < ps.count; i++)
-        if(peql(ps.point[i], p))
-            return 1;
-    return 0;
-}
-
-static int connected(const Point a, const Point b, const Tris edges)
+static int connected(const Point a, const Point b, const Tris edges, const Flags flags)
 {
     Points todo = psnew(edges.max);
     Points done = psnew(edges.max);
     Tris reach = tsnew(edges.max);
-    todo = psadd(todo, a, "first todo");
-    int connection = 0;
-    while(todo.count != 0 && connection != 1)
+    todo = psadd(todo, a);
+    int connection = false;
+    while(todo.count != 0 && connection != true)
     {
         const Point removed = todo.point[--todo.count];
-        done = psadd(done, removed, "done a point");
+        done = psadd(done, removed);
         // Get reachable edges from current point.
         reach.count = 0;
         for(int i = 0; i < edges.count; i++)
         {
             const Tri edge = edges.tri[i];
-            if(peql(edge.c, one))
+            if(psame(edge.c, flags.one))
                 continue;
-            if(peql(edge.a, removed))
-                reach = tsadd(reach, edge, "reach");
+            if(psame(edge.a, removed))
+                reach = tsadd(reach, edge);
         }
         // For all reachable edges
         for(int i = 0; i < reach.count; i++)
         {
-            // Destination reached.
-            if(peql(reach.tri[i].b, b))
+            // Was the destination reached?
+            if(psame(reach.tri[i].b, b))
             {
-                connection = 1;
+                connection = true;
                 break;
             }
-            // Otherwise add todo list.
+            // Otherwise add point of reachable edge to todo list.
             if(!psfind(done, reach.tri[i].b))
-                todo = psadd(todo, reach.tri[i].b, "todo reachable");
+                todo = psadd(todo, reach.tri[i].b);
         }
     }
     free(todo.point);
@@ -303,7 +373,8 @@ static int connected(const Point a, const Point b, const Tris edges)
     return connection;
 }
 
-static void revdel(Tris edges, const int w, const int h)
+// Graph Theory Reverse Delete algorithm. Kruskal 1956.
+static void revdel(Tris edges, const int w, const int h, const Flags flags)
 {
     sort(edges, descending);
     for(int i = 0; i < edges.count; i++)
@@ -312,79 +383,113 @@ static void revdel(Tris edges, const int w, const int h)
         if(outob(edge->a, w, h)
         || outob(edge->b, w, h))
         {
-            edge->c = one;
+            edge->c = flags.one;
             continue;
         }
         // Break the connection.
-        edge->c = one;
+        edge->c = flags.one;
         // If two points are not connected in anyway then reconnect.
         // Occasionally it will create a loop because true connectivity
         // checks all edges. Thankfully, the occasional loop benefits
         // the dungeon design else the explorer will get bored dead end after dead end.
-        if(!connected(edge->a, edge->b, edges)) edge->c = zer;
+        if(!connected(edge->a, edge->b, edges, flags)) edge->c = flags.zer;
     }
 }
 
-static void mdups(const Tris edges)
+static void mdups(const Tris edges, const Flags flags)
 {
     for(int i = 0; i < edges.count; i++)
     for(int j = 0; j < edges.count; j++)
     {
-        if(peql(edges.tri[j].c, one))
+        if(psame(edges.tri[j].c, flags.one))
             continue;
-        if(peql(edges.tri[i].c, one))
+        if(psame(edges.tri[i].c, flags.one))
             continue;
-        if(peql(edges.tri[i].a, edges.tri[j].b)
-        && peql(edges.tri[i].b, edges.tri[j].a))
-            edges.tri[j].c = one;
+        if(reveql(edges.tri[i], edges.tri[j]))
+            edges.tri[j].c = flags.one;
     }
 }
 
-static void draw(SDL_Renderer* const renderer, const Tris edges)
+static void mroom(const Map map, const Point where, const int w, const int h)
 {
-    for(int i = 0; i < edges.count; i += 1)
+    for(int i = -w; i <= w; i++)
+    for(int j = -h; j <= h; j++)
+    {
+        const int xx = where.x + i;
+        const int yy = where.y + j;
+        map.walling[yy][xx] = ' ';
+    }
+}
+
+static void mcorridor(const Map map, const Point a, const Point b)
+{
+    const Point step = sub(b, a);
+    const Point delta = {
+        step.x > 0.0f ? 1.0f : step.x < 0.0f ? -1.0f : 0.0f,
+        step.y > 0.0f ? 1.0f : step.y < 0.0f ? -1.0f : 0.0f,
+    };
+    const int sx = abs(step.x);
+    const int sy = abs(step.y);
+    const int dx = delta.x;
+    const int dy = delta.y;
+    int x = a.x;
+    int y = a.y;
+    for(int i = 0; i < sx; i++) map.walling[y][x += dx] = ' ';
+    for(int i = 0; i < sy; i++) map.walling[y += dy][x] = ' ';
+}
+
+// ############################################# This is what a bone looks like
+// #            ################################ when generated from an edge.
+// #            #####################          #
+// #  r o o m      c o r r i d o r    r o o m  #
+// #     A      #####################    B     #
+// #            ################################
+// #############################################
+static void bone(const Map map, const Tri e, const int w, const int h)
+{
+    mroom(map, e.a, w, h);
+    mroom(map, e.b, w, h);
+    mcorridor(map, e.a, e.b);
+}
+
+// Carve all bones from solid map.
+static void carve(const Map map, const Tris edges, const Flags flags, const int grid)
+{
+    for(int i = 0; i < edges.count; i++)
     {
         const Tri e = edges.tri[i];
-        if(peql(e.c, one))
+        if(psame(e.c, flags.one))
             continue;
-        SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
-        SDL_RenderDrawLine(renderer, e.a.x, e.a.y, e.b.x, e.a.y);
-        SDL_RenderDrawLine(renderer, e.b.x, e.b.y, e.b.x, e.a.y);
+        // Min room size ensures room will not be smaller than min x min.
+        const int min = 2;
+        const int size = grid / 2 - min;
+        const int w = min + rand() % size;
+        const int h = min + rand() % size;
+        bone(map, e, w, h);
     }
+}
+
+static Map mgen(const int w, const int h, const int grid, const int max)
+{
+    const Flags flags = { { 0.0f, 0.0f }, { 1.0f, 1.0f } };
+    const int border = 2 * grid;
+    const Points ps = prand(w, h, max, grid, border);
+    const Tris tris = delaunay(ps, w, h, 9 * max, flags);
+    const Tris edges = ecollect(tsnew(27 * max), tris, flags);
+    revdel(edges, w, h, flags);
+    const Map map = mnew(h, w);
+    mdups(edges, flags);
+    carve(map, edges, flags, grid);
+    free(tris.tri);
+    free(ps.point);
+    free(edges.tri);
+    return map;
 }
 
 int main()
 {
     srand(time(0));
-    // Randomize these.
-    const int xres = 400 + rand() % 400;
-    const int yres = 300 + rand() % 300;
-    const int max = 50 + rand() % 50;
-    // Keep grid constant.
-    const int grid = 20;
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    SDL_CreateWindowAndRenderer(xres, yres, 0, &window, &renderer);
-    const Points ps = prand(xres, yres, max, grid);
-    const Tris tris = delaunay(ps, xres, yres, 9 * max);
-    // 300 triangles = 900 points worth of non-unique edges.
-    const Tris edges = ecollect(tsnew(27 * max), tris);
-    // The revere-delete algorithm is a an algo in graph theory used to
-    // obtain a minimum spanning tree from a given connected edge weighted graph.
-    // Kruskal et al. (C) 1956.
-    revdel(edges, xres, yres);
-    mdups(edges);
-    draw(renderer, edges);
-    SDL_RenderPresent(renderer);
-    SDL_Event event;
-    do
-    {
-        SDL_PollEvent(&event);
-        SDL_Delay(10);
-    }
-    while(event.type != SDL_KEYUP && event.type != SDL_QUIT);
-    free(tris.tri);
-    free(ps.point);
-    free(edges.tri);
-    return 0;
+    const Map map = mgen(80, 120, 10, 20 * (1 + rand() % 4));
+    mprint(map);
+    mclose(map);
 }
