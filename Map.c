@@ -360,7 +360,7 @@ static void revdel(Tris edges, const int w, const int h, const Flags flags)
     {
         Tri* edge = &edges.tri[i];
         if(outob(edge->a, w, h)
-                || outob(edge->b, w, h))
+        || outob(edge->b, w, h))
         {
             edge->c = flags.one;
             continue;
