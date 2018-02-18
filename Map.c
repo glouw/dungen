@@ -368,8 +368,7 @@ static void revdel(Tris edges, const int w, const int h, const Flags flags)
         // Break the connection.
         edge->c = flags.one;
         // If two points are not connected in anyway then reconnect.
-        // Occasionally it will create a loop because true connectivity
-        // checks all edges. Thankfully, the occasional loop benefits
+        // Due to edge duplicates the occasional loop will occur. The occasional loop benefits
         // the dungeon design else the explorer will get bored dead end after dead end.
         if(!connected(edge->a, edge->b, edges, flags)) edge->c = flags.zer;
     }
