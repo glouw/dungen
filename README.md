@@ -17,7 +17,7 @@ Use case:
 
 Where the map generation function is defined as:
 
-    Map mgen(
+    Map xmgen(
             cols,
             rows,
             grid size,
