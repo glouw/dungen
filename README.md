@@ -1,8 +1,8 @@
 ![screenshot](dungen.PNG)
 
-Delaunay Triangulation Dungeon Generation.
+Delaunay Triangulation Dungeon Generator.
 
-    >> Inspired by Tiny Keep's Dungeon Generation.
+    >> Inspired by Tiny Keep's dungeon generator.
 
 Use case:
 
@@ -18,9 +18,9 @@ Use case:
 Where the map generation function is defined as:
 
     Map xmgen(
-            cols,
-            rows,
-            grid size,
+            number of columns,
+            number of rows,
+            size of grid,
             max number of rooms);
 
 Generated map is stored as a 2D array of characters.
