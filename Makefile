@@ -34,7 +34,7 @@ $(BIN): $(SRCS:.c=.o)
 	$(CC) $(CFLAGS) $(SRCS:.c=.o) $(LDFLAGS) -o $(BIN)
 
 # Compile.
-%.o : %.c
+%.o : %.c Makefile
 	$(CC) $(CFLAGS) -MMD -MP -MT $@ -MF $*.td -c $<
 	@$(RM) $*.d
 	@$(MV) $*.td $*.d
