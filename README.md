@@ -1,4 +1,4 @@
-![screenshot](dungen.PNG)
+![](img/dungen.PNG)
 
 Delaunay Triangulation Dungeon Generator.
 
